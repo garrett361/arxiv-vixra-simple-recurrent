@@ -417,18 +417,17 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
           </d-math>, one-hot-encoding corresponds to taking <d-math>x_t^i = \delta^i_{c_t}</d-math> with <d-math>i
           </d-math> the vector index. The <d-math>x_t</d-math> are then
           <d-code language='python'>(batch_size, seq_len, C)</d-code>-shaped.
-
-          <br>
-          <br>
           <d-code language='python'>pytorch</d-code> has a <a target='_blank' rel='noopener noreferrer'
             href='https://pytorch.org/docs/stable/generated/torch.nn.functional.one_hot.html'>built-in <d-code
-              language='python'>F.one_hot</d-code></a> method for one-hot encoding text given an input tensor <d-code
-            language='python'>chars</d-code> holding
-          character indices, but it's also nice to know how one might perform the encoding a more manually.
+              language='python'>F.one_hot</d-code></a> method for one-hot encoding text given an <d-code
+            language='python'>chars</d-code> tensor holding
+          character indices, but it's a nice exercise in using vectorized code to figure out how one would perform the
+          encoding manually.
 
           <br>
           <br>
-          When <d-code language='python'>chars</d-code> is a simple one-dimensional vector such that
+          When <d-code language='python'>chars</d-code> is a simple one-dimensional,
+          <d-code language='python'>(seq_len, )</d-code>-shaped vector such that
           <d-code language='python'>chars[t]</d-code> corresponds to the character index at the <d-code
             language='python'>t</d-code>-th position in the text, then the associated
           <d-code language='python'>one_hot</d-code> tensor of shape
@@ -449,7 +448,7 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
           document in the batch, one can instead use the <a target='_blank' rel='noopener noreferrer'
             href='https://pytorch.org/docs/stable/generated/torch.Tensor.scatter_.html'>
             <d-code language='python'>.scatter_</d-code> method
-          </a> to insert ones into the appropriately shaped zero method
+          </a> to insert ones into the appropriately shaped zero tensor
           in a vectorized manner:
           <d-code block='' language='python'>
             # Use a random character sequence.
@@ -457,6 +456,7 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
             one_hot = torch.zeros(*chars.shape, C)
             one_hot.scatter_(dim=-1, index=chars.unsqueeze(-1), src=torch.ones_like(one_hot))
           </d-code>
+          which is essentially what <d-code language='python'>F.one_hot</d-code> is doing under the hood.
         </d-footnote>.
       </li>
       <li>
