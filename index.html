@@ -8,7 +8,7 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <script src="template.v2.js"></script>
-  <title>arXiv/viXra - Workflow - Garrett Goon</title>
+  <title>arXiv/viXra - Simple Recurrent Models - Garrett Goon</title>
 </head>
 
 <body>
@@ -56,16 +56,27 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
   <d-article>
 
     <p>
+      <em>
+        <u>Note:</u>
+      </em> The Jupyter/Colab notebooks relevant to this post are
       <a target='_blank' rel='noopener noreferrer'
-        href='https://github.com/garrett361/arxiv-vixra-ml/tree/main/simple_recurrent'><em>Note: The Jupyter/Colab
-          notebooks I used to perform much
-          of the following analysis can be found on my GitHub page.</em></a>
+        href='https://github.com/garrett361/arxiv-vixra-ml/tree/main/simple_recurrent'>here on my GitHub page.</a>
+      My<d-code language='python'>pytorch_lightning</d-code> implementation of the simple RNNs considered in this post
+      <a target='_blank' rel='noopener noreferrer'
+        href='https://github.com/garrett361/arxiv-vixra-ml/blob/main/arxiv_vixra_models/simple_recurrent.py'>can be
+        found here.</a>
     </p>
+
+    <h3>
+      Sequential Information
+    </h3>
+
 
     <p>
       A central limitation of the <a target='_blank' rel='noopener noreferrer'
         href='https://garrettgoon.com/arxiv-vixra-baseline-models/'>baseline models considered previously</a>
-      is that they had no means of efficiently using the information inherent to the ordering of the text. For instance,
+      is that they have no means of efficiently using the information inherent to the ordering of the text. For
+      instance,
       one would expect that the logistic regression and random forest models would perform just about as well<d-footnote
         id='shuffle'>
         Apart from some specific minor degradations, such as the weakening of the signal which arises when a title ends
@@ -77,8 +88,10 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
     <p>
       <em>Recurrent Neural Networks</em> (RNNs) are the basic architecture which attempts to capture the information in
       the
-      relative ordering of inputs. We briefly review their properties below, plus some details of their implementation
-      <d-code language='python'>pytorch</d-code>, and examine their performance on on the arXiv/viXra data.
+      relative ordering of inputs. We briefly review their properties below, some details of their implementation
+      in
+      <d-code language='python'>pytorch</d-code>, and examine their performance on the arXiv/viXra data and on my own
+      papers.
     </p>
 
 
@@ -266,7 +279,7 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
 
     <p>
       The weights <d-math>W</d-math> and biases <d-math>b</d-math> are the learnable parameters of the
-      model.
+      model. The set of <d-math>h_t</d-math>'s for all<d-math>t</d-math> form the output of the GRU.
     </p>
 
     <h4>
@@ -489,9 +502,12 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
         the <d-code language='python'>embedding_dim</d-code> of <d-math>\hat{E}</d-math> varies with respect to that of
         <d-math>E</d-math>.
 
-      </d-footnote>, <d-code language='python'>embedding_dim</d-code>, and one might also choose to only work with
+      </d-footnote>, denoted by <d-code language='python'>embedding_dim</d-code>, and one might also choose to only work
+      with
       a subset of the vocabulary, as the vast majority of the words in a corpus are captured in a tiny fraction of the
-      vocabulary generally. See the plot below. We set <d-code language='python'>embedding_dim = 256</d-code> and work
+      vocabulary, a general phenomenon <a target='_blank' rel='noopener noreferrer'
+        href='https://en.wikipedia.org/wiki/Zipf' s_law'>known as Zipf's law</a>. See the plot below. We set
+      <d-code language='python'>embedding_dim = 256</d-code> and work
       with the whole
       <d-math>V\sim \mathcal{O}(2 \times 10 ^4)</d-math>-sized vocabulary for arXiv/viXra titles.
     </p>
@@ -745,7 +761,7 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
       </li>
       <li>
         <a target="_blank" rel="noopener noreferrer" href="https://garrettgoon.com/arxiv-vixra-simple-recurrent/">Simple
-          Recurrent</a>
+          Recurrent Models</a>
       </li>
       <li>
         ...in progress...
