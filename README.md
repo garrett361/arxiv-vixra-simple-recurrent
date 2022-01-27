@@ -1,3 +1,3 @@
-# arXiv/viXra - Workflow
+# arXiv/viXra - Simple REcurrent
 
-[Description of the workflow for my arXiv/viXra project.](https://garrettgoon.com/arxiv-vixra-workflow/)
+[ Simple recurrent models for arXiv/viXra.](https://github.com/garrett361/arxiv-vixra-simple-recurrent)
