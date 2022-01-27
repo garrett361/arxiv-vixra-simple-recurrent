@@ -1,0 +1,766 @@
+<!doctype html>
+
+<!-- Any figures to-be called with <img ...> should be placed in /static and called
+as with /static as their root. E.g. <img src="/diagrams/fig1.png">
+-->
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="template.v2.js"></script>
+  <title>arXiv/viXra - Workflow - Garrett Goon</title>
+</head>
+
+<body>
+
+  <!-- I added a date field to more easily add the date to the front matter. Removed the DOI file -->
+
+  <d-front-matter>
+    <script type="text/json">
+      {
+        "title": "arXiv/viXra - Simple Recurrent Models",
+        "authors": [
+          {
+            "author": "Garrett Goon",
+            "authorURL": "https://garrettgoon.com",
+            "affiliation": "CMU",
+            "affiliationURL": "https://www.cmu.edu/physics/"
+          }
+        ],
+        "katex": {
+          "delimiters": [
+            {
+              "left": "$",
+              "right": "$",
+              "display": false
+            },
+            {
+              "left": "$$",
+              "right": "$$",
+              "display": true
+            }
+          ]
+        },
+        "date" : "25 January, 2022"
+      }
+  </script>
+  </d-front-matter>
+
+  <d-title>
+    <h1>arXiv/viXra - Simple Recurrent Models</h1>
+    <p>Working memory.</p>
+  </d-title>
+
+
+
+  <d-article>
+
+    <p>
+      <a target='_blank' rel='noopener noreferrer'
+        href='https://github.com/garrett361/arxiv-vixra-ml/tree/main/simple_recurrent'><em>Note: The Jupyter/Colab
+          notebooks I used to perform much
+          of the following analysis can be found on my GitHub page.</em></a>
+    </p>
+
+    <p>
+      A central limitation of the <a target='_blank' rel='noopener noreferrer'
+        href='https://garrettgoon.com/arxiv-vixra-baseline-models/'>baseline models considered previously</a>
+      is that they had no means of efficiently using the information inherent to the ordering of the text. For instance,
+      one would expect that the logistic regression and random forest models would perform just about as well<d-footnote
+        id='shuffle'>
+        Apart from some specific minor degradations, such as the weakening of the signal which arises when a title ends
+        in a punctuation mark (an uncommon, but strong, viXra signal).
+      </d-footnote> if we were
+      to shuffle around the words in each title.
+    </p>
+
+    <p>
+      <em>Recurrent Neural Networks</em> (RNNs) are the basic architecture which attempts to capture the information in
+      the
+      relative ordering of inputs. We briefly review their properties below, plus some details of their implementation
+      <d-code language='python'>pytorch</d-code>, and examine their performance on on the arXiv/viXra data.
+    </p>
+
+
+    <h3>RNNs, Briefly</h3>
+
+    <h4>General Structure</h4>
+
+    <p>
+      RNNs are relevant for problem in which we have an ordered series of inputs <d-math>x_t</d-math>, where <d-math>
+        t\in\{0,\ldots, T\}</d-math>, and we wish to use the entire series for some useful purpose. In the context of
+      arXiv/viXra,
+      the <d-math>x_t</d-math> would be (tensorial representations of) the individual characters or words in a title,
+      say, in their natural left-to-right order.
+    </p>
+
+    <p>
+      The inputs <d-math>x_t</d-math> are consumed sequentially and are used to update the internal state of the RNN,
+      <d-math>h_t</d-math>, a <em>hidden</em> or <em>latent</em> variable. The update step also takes into account the
+      form of the previous hidden state, <d-math>h_{t-1}</d-math>, and this pattern continues recursively such that
+      <d-math>h_t
+      </d-math> contains information from all previous hidden states and inputs all the way back to the initial
+      <d-footnote id='hidden_initialization'>
+        The initial hidden state <d-math>h_0</d-math> is often taken to be a tensor filled with zeros. <a
+          target='_blank' rel='noopener noreferrer'
+          href='https://pytorch.org/docs/stable/generated/torch.nn.RNN.html'>This is the
+          default behavior</a>
+        <d-code language='python'>pytorch</d-code>, for instance. However, it is generally beneficial in Machine
+        Learning to allow the model to figure out its own best parameters when possible, and <a target='_blank'
+          rel='noopener noreferrer' href='https://ruder.io/deep-learning-nlp-best-practices/'>the best practice</a> is
+        to
+        promote
+        the initial state to a learnable parameter; see, e.g., <a target='_blank' rel='noopener noreferrer'
+          href='https://www.cs.toronto.edu/~hinton/csc2535/notes/lec10new.pdf'>Hinton's RNN presentation, slide 14</a>.
+
+        <br>
+        <br>
+        It is easy enough to implement this in a <d-code language='python'>pytorch</d-code> model (minimal sketch):
+        <d-code block='' language='python'>
+          class DynamicInitialHiddenRNN(nn.Module):
+          &nbsp;&nbsp;"""Adds a learnable initial hidden state to the vanilla torch RNN.
+          &nbsp;&nbsp;"""
+          &nbsp;&nbsp;def __init__(self, input_size: int, hidden_size: int):
+          &nbsp;&nbsp;&nbsp;&nbsp;super().__init__()
+          &nbsp;&nbsp;&nbsp;&nbsp;self.rnn = nn.RNN(input_size, hidden_size, batch_first=True)
+          &nbsp;&nbsp;&nbsp;&nbsp;# Initialize the hidden state randomly.
+          &nbsp;&nbsp;&nbsp;&nbsp;self.initial_hidden = nn.Parameter(torch.randn(1, 1, hidden_size))
+
+          &nbsp;&nbsp;def forward(self, inputs: Tensor, hidden: Optional[Tensor] = None) -> Tuple[Tensor, Tensor]:
+          &nbsp;&nbsp;&nbsp;&nbsp;if hidden is None:
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; hidden = self.initial_hidden
+          &nbsp;&nbsp;&nbsp;&nbsp;# Expand hidden to match batch size and ensure contiguous.
+          &nbsp;&nbsp;&nbsp;&nbsp;batch_size = inputs.shape[0]
+          &nbsp;&nbsp;&nbsp;&nbsp;hidden = hidden.expand(-1, batch_size, -1).contiguous()
+          &nbsp;&nbsp;&nbsp;&nbsp;output, hidden = self.rnn(inputs, hidden)
+          &nbsp;&nbsp;&nbsp;&nbsp;return output, hidden
+        </d-code>
+      </d-footnote>
+      <d-math>
+        x_0</d-math> and <d-math>h_0</d-math>. This long chain of dependencies can create difficulties in training
+      <d-footnote id='tbptt'>
+        For very long sequences of length-<d-math>T</d-math>, it is common to process the sequence in length-<d-math>
+          n\ll T
+        </d-math> chunks (with <d-math>n</d-math> determined by practical considerations), performing
+        backpropagation only over these subsequences and passing the resulting final hidden state <d-math>h_n
+        </d-math> along
+        to be used as the initial state for the next <d-math>n</d-math> terms. More specifically, the computational
+        graph is reset
+        after each sub-sequence via calls of the form
+        <d-code language='python'> hidden.detach()</d-code>
+        in <d-code language='python'>pytorch</d-code>, since memory constraints forbid performing backprop over the
+        full, length-
+        <d-math>T</d-math>
+        sequence. This procedure goes by the name of <em>truncated backpropagation through time</em> (TBPTT).
+
+        <br>
+        <br>
+        In <d-code language='python'>pytorch_lightning</d-code> TBPTT is performed automatically and there
+        is no need for manual <d-code language='python'>.detach()</d-code> calls if an
+        <d-code language='python'>self.truncated_bptt_steps</d-code> attribute is set for architecture
+        (a <d-code language='python'>pl.LightningModule</d-code> subclass), though I found the whole process somewhat
+        underdocumented. After every training step, <d-code language='python'>pl</d-code> <a target='_blank'
+          rel='noopener noreferrer'
+          href='https://github.com/PyTorchLightning/pytorch-lightning/blob/0e20119d24c410c9004a9d0c6ce0505914c1dc02/pytorch_lightning/loops/optimization/optimizer_loop.py#L461'>extracts
+          the hidden states</a>
+        of the architecture and <a target='_blank' rel='noopener noreferrer'
+          href='https://github.com/PyTorchLightning/pytorch-lightning/blob/0e20119d24c410c9004a9d0c6ce0505914c1dc02/pytorch_lightning/loops/utilities.py#L42'>recursively
+          detaches them</a> in the process. In my experience, getting TBPTT to function in the expected manner also
+        requires
+        <a target='_blank' rel='noopener noreferrer'
+          href='https://pytorch-lightning.readthedocs.io/en/latest/api/pytorch_lightning.core.lightning.html#pytorch_lightning.core.lightning.LightningModule.tbptt_split_batch'>overwriting
+          the <d-code language='python'>tbptt_split_batch</d-code></a> method with a custom implementation, as the
+        default <a target='_blank' rel='noopener noreferrer'
+          href='https://github.com/PyTorchLightning/pytorch-lightning/discussions/10086'>seems to make some curious
+          assumptions</a>
+      </d-footnote>.
+    </p>
+
+    <p>
+      The hidden states <d-math>h_t</d-math> are also the outputs of the entire network, one or more of which are then
+      used for further purposes. In the context of arXiv/viXra text classificaiton, the simplest use would be to take
+      the final hidden state <d-math>h_T</d-math>, which carries information about the entire sequence, and feed this
+      into a fully connected layer and sigmoid function to predict the classification probabilities of a given title.
+    </p>
+
+
+    <h4>
+      A Specific Architecture: Gated Recurrent Units
+    </h4>
+
+    <p>
+      I used <a target='_blank' rel='noopener noreferrer' href='https://arxiv.org/pdf/1406.1078v3.pdf'>Gated Recurrent
+        Units</a> (GRUs) as the recurrent layers <d-footnote id='other_architectures'>
+        The other basic recurrent architectures which are commonly seen are so-called vanilla RNNs and long short-term
+        memory (LSTM) layers. Simple trials demonstrated that GRUs performed similarly well on arXiv/viXra
+        classification to LSTMs (both architectures faring better than vanilla RNNs, as expected), while training faster
+        and being more compact, as they only require one latent variable in contrast to the two needed for LSTMs. See <a
+          target='_blank' rel='noopener noreferrer'
+          href='https://pytorch.org/docs/1.9.1/generated/torch.nn.RNN.html#torch.nn.RNN'>
+          <d-code language='python'>nn.RNN</d-code>
+        </a>,
+        <a target='_blank' rel='noopener noreferrer'
+          href='https://pytorch.org/docs/1.9.1/generated/torch.nn.LSTM.html#torch.nn.LSTM'>
+          <d-code language='python'>nn.LSTM</d-code>
+        </a>, and <a target='_blank' rel='noopener noreferrer'
+          href='https://pytorch.org/docs/1.9.1/generated/torch.nn.GRU.html#torch.nn.GRU'>
+          <d-code language='python'>nn.GRU</d-code>
+        </a> for the <d-code language='python'>pytorch</d-code> implementations of these architectures.
+      </d-footnote> in the arXiv/viXra models. GRUs process an input
+      <d-math>x_t</d-math> via the following steps <d-footnote id='tensor dimensions'>
+        All of the <d-math>x_t</d-math> are generally encoded in three-dimensional tensors shaped as in
+        <d-code language='python'>(batch_size, seq_len, input_size)</d-code>, assuming a
+        <d-code language='python'>pytorch</d-code>, <d-code language='python'>batch_first = True</d-code> type
+        implementation (assumed throughout). E.g. for a
+        batch of 50 one-hot encoded text samples, each 100 characters long and which only use
+        lower case characters a-z, the <d-math>x_t</d-math> would be <d-code language='python'>(50, 100, 26)</d-code>
+        -shaped. Similarly, all of the <d-math>h_t</d-math> are ensconced in a
+        <d-code language='python'>(b * num_layers, batch_size, hidden_size)</d-code>-shaped
+        <d-code language='python'>output</d-code> tensor where
+        <d-code language='python'>hidden_size</d-code> is the length of the hidden state vector,
+        <d-code language='python'> num_layers</d-code>
+        is the number of stacked recurrent layers, and
+        <d-code language='python'>b = 2 if bidirectional else 1 </d-code>
+        doubles the size of the hidden state if the architecture is also bidirectional; see below. The batch
+        dimensions
+        are processed in parallel in the steps outlined below. Indices on <d-math>x_t, h_t</d-math> will generally be
+        suppressed, as in the above.
+      </d-footnote> :
+    <ul>
+      <li>
+        Use <d-math>x_t</d-math> and the preceding hidden state <d-math>h_{t-1}</d-math> to determine what fraction of
+        <d-math>h_{t-1}</d-math> to hold onto and include in the updated state <d-math>h_{t}</d-math>. The fraction
+        $z_t$ is
+        determined through the usual process of using weight-matrices (<d-math>W</d-math>), bias-vectors (<d-math>b
+        </d-math>), and a
+        sigmoid function <d-math>\sigma(x)</d-math>
+        ,
+        <d-math block=''>
+          z_t \equiv \sigma\left(W_{iz} \cdot x_t +W_{hz}\cdot h_{t-1} +b_z\right)\ ,
+        </d-math>
+        such that the updated state will be of the form <d-math>h_t= z_t * h_{t-1}+\ldots</d-math>
+      </li>
+      <li>
+        Use <d-math>x_t</d-math> and the preceding hidden state <d-math>h_{t-1}</d-math> to determine what <em>new</em>
+        information from <d-math>x_t</d-math> to include in the updated state <d-math>h_{t}</d-math>. This new data
+        <d-math>n_t</d-math>
+        is determined through a similar process of using weights, biases, and non-linearities, applied pointwise:
+        <d-math block=''>
+          n_t \equiv \tanh\left(W_{in}\cdot x_t + b_{in} +r_t * \left(W_{hn}\cdot h_{t-1}+b_{hn}\right)\right)
+        </d-math>
+        where <d-math>r_t</d-math> is defined similarly to <d-math>z_t</d-math>
+        <d-math block=''>
+          r_t \equiv \sigma\left(W_{ir} \cdot x_t +W_{hr}\cdot h_{t-1} +b_r\right)\ .
+        </d-math>
+      </li>
+      <li>
+        The fully updated hidden state is a weighted sum of the previous hidden
+        state <d-math>h_{t-1}</d-math> and the
+        new information <d-math>n_t</d-math>:
+        <d-math block=''>
+          h_t = (1 - z_t)* n_t + z_t * h_{t-1}
+        </d-math>
+      </li>
+    </ul>
+    </p>
+
+    <p>
+      The weights <d-math>W</d-math> and biases <d-math>b</d-math> are the learnable parameters of the
+      model.
+    </p>
+
+    <h4>
+      Bells and Whistles: More Layers and Directions
+    </h4>
+
+    <p>
+      We finally mention the possibility of increasing the depth of the RNN architecture by stacking multiple such
+      layers and the option of processing the inputs <d-math>x_t</d-math> in both the forward and backwards directions,
+      resulting in a <em>bidirectional</em> architecture.
+    </p>
+
+    <p>
+      Both features are essentially what they sound like, though the details are important.
+    <ul>
+      <li>
+        Stacking <d-math>M</d-math> RNNs leads to multiple hidden states: <d-math>h_t \longrightarrow h_t^i</d-math>,
+        <d-math>i \in\{0, \ldots, N-1\}</d-math>, one per layer. While the <d-math>x_t</d-math> are still the inputs for
+        the first
+        <d-math>i=0</d-math> layer, subsequent layers with <d-math>i>0</d-math> process the hidden state of the
+        preceding layer (<d-math>h^{i-1}_t</d-math>) as their input. The weights and biases of layers <d-math>i>0
+        </d-math> thus have different dimensions from those of the first <d-math>i=0</d-math> layer, if
+        <d-code language='python'>input_size != hidden_size</d-code>. In <d-code language='python'>pytorch</d-code>, the
+        outputs of stacked architectures are the hidden states of the final layer at each time-step: <d-math>h^{N-1}_t
+        </d-math>.
+      </li>
+      <li>
+        Bidirectional RNNs process the inputs forwards and backwards, with independent weights and biases used for each
+        pass. This is desirable in contexts such as arXiv/viXra classification, since the passes in the two directions
+        capture different contextual information, both directions being plausbily informative. In <d-code
+          language='python'>pytorch</d-code>, the outputs of a bidirectional architecture come from concatenating the
+        hidden states of the two passes together<d-footnote id='bidirectional'>
+          I found the concatenation step a little under-documented. The<d-code language='python'>output</d-code> tensor
+          is
+          <d-code language='python'>(batch_size, seq_len, 2 * hidden_size)</d-code>-shaped, but it is not clear from the
+          documentation
+          what the entry at time-step <d-code language='python'>t</d-code>
+          (<d-code language='python'>output[:, t]</d-code>) corresponds to, precisely. Presumably (and
+          correctly), the first half of the output (<d-code language='python'>output[:, t, :hidden_size]</d-code>) is
+          the hidden state generated after stepping through the first
+          <d-code language='python'>t</d-code> inputs
+          (<d-code language='python'>x[:, :t]</d-code>) in the
+          forward direction. But do the entries <d-code language='python'>output[:, t, hidden_size:]</d-code>
+          corresponding
+          the backwards direction
+          arise from stepping backwards through the final
+          <d-code language='python'>t</d-code> entries of the input or through all entries from the end of the sequence
+          all the way back to entry <d-code language='python'>t</d-code>? <d-code language='python'>x[:, -t:]</d-code>
+          or
+          <d-code language='python'>x[:, t:]</d-code>?
+
+          <br>
+          <br>
+          The answer is the latter: <d-code language='python'>output[:, t]</d-code> contains information from
+          processing
+          the
+          first
+          <d-code language='python'>t</d-code> input entries in the forwards direction and the final <d-code
+            language='python'>seq_len - t</d-code> entries in the backwards direction. One can ask similar questions
+          regarding the
+          <d-code language='python'>hidden</d-code> tensor returned by the RNN and, thankfully, these are what one would
+          expect: they are the final hidden states which arise from a forward pass and a backward pass, concatenated
+          into a
+          <d-code language='python'>(2, seq_len, hidden_size)</d-code>-tensor. These statements can be
+          verified (<a target='_blank' rel='noopener noreferrer'
+            href='https://towardsdatascience.com/understanding-bidirectional-rnn-in-pytorch-5bd25a5dd66'>following this
+            nice post</a>) by creating a bidirectional RNN, two single-direction RNNs which have their weights tied to
+          the bidirectional one, and comparing the<d-code language='python'>output</d-code>
+          and<d-code language='python'>hidden</d-code> tensors of each as they run through a sequence in the relevant
+          direction(s):
+          <d-code block='' language='python'>
+            # Create three simple GRUs, one of which is bi-directional.
+            forward_gru = nn.GRU(input_size=1, hidden_size=1, batch_first=True)
+            backward_gru = nn.GRU(input_size=1, hidden_size=1, batch_first=True)
+            bi_gru = nn.GRU(input_size=1, hidden_size=1, batch_first=True, bidirectional=True)
+
+            # Tie their weights together.
+            for name, p in forward_gru.named_parameters():
+            &nbsp;&nbsp;getattr(forward_gru, name).data = getattr(bi_gru, name).data
+            &nbsp;&nbsp;getattr(backward_gru, name).data = getattr(bi_gru, name + '_reverse').data
+
+            # Pass inputs and reversed inputs as relevant into the RNNs.
+            rand_input = torch.randn(1, 3, 1)
+            rand_input_flip = rand_input.flip(1)
+
+            forward_gru_output, forward_gru_hidden = forward_gru(rand_input)
+            backward_gru_output, backward_gru_hidden = backward_gru(rand_input_flip)
+            backward_gru_output_flip = backward_gru_output.flip(1)
+            bi_gru_output, bi_gru_hidden = bi_gru(rand_input)
+
+            # The below vanishes.
+            forward_backward_output = torch.cat((forward_gru_output, backward_gru_output_flip), dim=-1)
+            output_difference = forward_backward_output - bi_gru_output
+            torch.testing.assert_close(output_difference, torch.zeros_like(output_difference))
+
+            forward_backward_hidden = torch.cat((forward_gru_hidden, backward_gru_hidden), dim=0)
+            hidden_difference = forward_backward_hidden - bi_gru_hidden
+            torch.testing.assert_close(hidden_difference, torch.zeros_like(hidden_difference))
+          </d-code>
+
+          <br>
+          <br>
+          Importantly, this means that if we wanted to use the hidden states which contain information from having seen
+          the
+          entire sequence in both directions, we would need to extract
+          <d-code language='python'>output[:, -1, :hidden_size]</d-code> and
+          <d-code language='python'>output[:, 0, hidden_size:]</d-code>, <em>not</em> simply the final entry
+          <d-code language='python'>output[:, -1]</d-code>.
+
+      </li>
+    </ul>
+    </p>
+
+    <h3>RNNs for arXiv/viXra</h3>
+
+    <p>
+      Sticking to the theme of starting simple, we analyze the performance of single-layer, uni-directional GRUs on
+      arXiv/viXra title data<d-footnote id='experiments'>
+        Experiments with additional layers and bidirectionality only led to modest improvements upon the results
+        reported below.
+      </d-footnote>.
+    </p>
+
+    <h4>Character- or Word-Level?</h4>
+
+    <p>
+      We need to decide how exactly to encode the text as a series of tensors <d-math>x_t</d-math>. The natural options
+      are as follows:
+    <ul>
+      <li>
+        <b>One-Hot Encode:</b> The simplest option is to let each time-step correspond to a single character and
+        represent each such character as a vector pointing in some cardinal direction <d-footnote id='one_hot'>
+          That is, if we index each of the possible <d-math>C</d-math>, say, characters by an integer <d-math>c \in \{0,
+            \ldots, C-1\}</d-math>, then denoting the character appearing at time-step <d-math>t</d-math> by <d-math>c_t
+          </d-math>, one-hot-encoding corresponds to taking <d-math>x_t^i = \delta^i_{c_t}</d-math> with <d-math>i
+          </d-math> the vector index. The <d-math>x_t</d-math> are then
+          <d-code language='python'>(batch_size, seq_len, C)</d-code>-shaped.
+
+          <br>
+          <br>
+          <d-code language='python'>pytorch</d-code> has a <a target='_blank' rel='noopener noreferrer'
+            href='https://pytorch.org/docs/stable/generated/torch.nn.functional.one_hot.html'>built-in <d-code
+              language='python'>F.one_hot</d-code></a> method for one-hot encoding text given an input tensor <d-code
+            language='python'>chars</d-code> holding
+          character indices, but it's also nice to know how one might perform the encoding a more manually.
+
+          <br>
+          <br>
+          When <d-code language='python'>chars</d-code> is a simple one-dimensional vector such that
+          <d-code language='python'>chars[t]</d-code> corresponds to the character index at the <d-code
+            language='python'>t</d-code>-th position in the text, then the associated
+          <d-code language='python'>one_hot</d-code> tensor of shape
+          <d-code language='python'>(seq_len, C)</d-code> can be generated by creating a zero-tensor of this same shape
+          and then inserting ones at all appropriate locations, as in:
+          <d-code block='' language='python'>
+            # Use a random character sequence.
+            chars = torch.randint(C, (seq_len, ))
+            one_hot = torch.zeros(*chars.shape, C)
+            one_hot[torch.arange(*chars.shape), chars] = 1.
+          </d-code>
+
+          <br>
+          When <d-code language='python'>chars</d-code> instead has a batch dimension and is of shape
+          <d-code language='python'>(batch_size, seq_len)</d-code>, such that
+          <d-code language='python'>chars[b, t]</d-code> corresponds to the character index at the <d-code
+            language='python'>t</d-code>-th position in the text in the <d-code language='python'>b</d-code>-th
+          document in the batch, one can instead use the <a target='_blank' rel='noopener noreferrer'
+            href='https://pytorch.org/docs/stable/generated/torch.Tensor.scatter_.html'>
+            <d-code language='python'>.scatter_</d-code> method
+          </a> to insert ones into the appropriately shaped zero method
+          in a vectorized manner:
+          <d-code block='' language='python'>
+            # Use a random character sequence.
+            chars = torch.randint(C, (batch_size, seq_len))
+            one_hot = torch.zeros(*chars.shape, C)
+            one_hot.scatter_(dim=-1, index=chars.unsqueeze(-1), src=torch.ones_like(one_hot))
+          </d-code>
+        </d-footnote>.
+      </li>
+      <li>
+        <b>Embeddings:</b> Alternatively, we could let each time-step correspond to a single <em>word</em>
+        <d-footnote id='word_def'>
+          Or other series of characters separated from others by white space, per the details of text-normalization. We
+          will refer to them all as "words", for simplicity.
+        </d-footnote> in the text. There are commonly <d-math>V\sim \mathcal{O}(10 ^5)</d-math> or more unique words in
+        a
+        corpus' vocabulary, as opposed to <d-math>C\sim \mathcal{O}(10 ^2)</d-math> characters, making a one-hot
+        encoding
+        infeasible. Instead, we can assign each word is to a vector living in some
+        <d-code language='python'>embedding_dim</d-code>
+        <d-math>\ll V</d-math>-sized vector space, with the components of each vector
+        randomly initialized. The vector components are learnable parameters which mutate upon training.
+      </li>
+    </ul>
+    </p>
+
+    <p>
+      We use both options. For embeddings, there are various choices to make. One has to choose both the dimension of
+      the embedding space<d-footnote id='embedding_space'>
+        The embeddings are stored in a <d-code language='python'>(V, embedding_dim)</d-code>-shaped matrix <d-math>E
+        </d-math>.
+        Empirically, choosing <d-code language='python'>embedding_dim</d-code>
+        <d-math>\sim \mathcal{O}(10^2)</d-math> apparently works well on most NLP tasks and choosing a dimension much
+        larger
+        than this only has a weak effect on performance, if any. There has been <a target='_blank'
+          rel='noopener noreferrer' href='https://arxiv.org/pdf/1812.04224.pdf'>progress in understanding this finding
+          on a theoretical level</a> by analyzing the so-called Parwise Inner Product (PIP) loss which is the
+        Frobenius
+        norm of the difference between the inner-products along the <d-code language='python'>embedding_dim</d-code>
+        -sized dimension of two differnent embedding matrices:
+        <d-math block=''>
+          {\rm Loss} = || E_1 \cdot E_1^T - E_2 \cdot E_2^T||
+        </d-math>
+        This loss is a measure of the inherent similarity between the two embeddings since, for instance, if <d-math>E_1
+        </d-math> and <d-math>E_2</d-math> only differed by a rotation in the embedding space, then the loss would
+        vanish. The referenced paper
+        finds a bias-variance decomposition for the loss between the ideal ("oracle") embedding matrix, <d-math>E
+        </d-math>, and a estimator thereof, <d-math>\hat{E}</d-math>, and demonstrates how these contributions grow and
+        shrink as
+        the <d-code language='python'>embedding_dim</d-code> of <d-math>\hat{E}</d-math> varies with respect to that of
+        <d-math>E</d-math>.
+
+      </d-footnote>, <d-code language='python'>embedding_dim</d-code>, and one might also choose to only work with
+      a subset of the vocabulary, as the vast majority of the words in a corpus are captured in a tiny fraction of the
+      vocabulary generally. See the plot below. We set <d-code language='python'>embedding_dim = 256</d-code> and work
+      with the whole
+      <d-math>V\sim \mathcal{O}(2 \times 10 ^4)</d-math>-sized vocabulary for arXiv/viXra titles.
+    </p>
+
+    <figure style='grid-column-end: page-end' id='vocab size'>
+      <img src='images/embedding_vocab_words_removed_plot.svg' alt='Plot of words versus vocab fraction removed.'>
+      <figcaption>
+        One might excise rare words from the vocabulary, replacing all such outside-of-vocab words with
+        <d-code language='python'>&lt;UNK></d-code>, a special token. This plot demonstrates the fraction of all words
+        in arXiv/viXra titles that would be replaced by <d-code language='python'>&lt;UNK></d-code> (y-axis) if we were
+        to remove various fractions of the total vocabulary size, rarest words first (x-axis). For instance, cutting the
+        vocabulary size in half would only affect <d-math>\sim5\%</d-math> of all words in all titles. The different
+        points come from discarding all words in in the vocabulary which appear fewer than
+        <d-code language='python'>min_word_count</d-code> times in the training data.
+      </figcaption>
+    </figure>
+
+    <h4>
+      Architecture Details
+    </h4>
+
+    <p>
+      The recurrent models are all fairly simple: the GRU consumes the one-hot-encoded or embedded text as inputs and
+      the ensuing hidden states (which are optionally first passed through a dropout layer) are fed into a
+      single fully-connected layer to predict a single number, the
+      probability that a given title comes from a viXra paper. We use
+      <d-code language='python'>hidden_size = 512</d-code> for all models.
+    </p>
+
+    <p>
+      The <d-code language='python'>python</d-code> code for the relevant
+      <d-code language='python'>nn.LightningModule</d-code>
+      subclasses <a target='_blank' rel='noopener noreferrer'
+        href='https://github.com/garrett361/arxiv-vixra-ml/blob/main/arxiv_vixra_models/simple_recurrent.py'>can be
+        found in the <d-code language='python'>arxiv_vixra_models</d-code> package</a>. The code also accommodates the
+      additional bells and whistles listed above and further features not detailed here.
+    </p>
+
+    <p>
+      An important choice is precisely what data from the GRU hidden states is passed to the feed-forward layers. While
+      we could pass in only the hidden state from the final time step, since that is the unique state which has seen the
+      entire title text, this choice poses the risk of missing out on important information that may have appeared early
+      on in the title but which has faded out of the hidden state with time. So, instead of passing in this final
+      time-step (<d-code language='python'>output[:, -1]</d-code>), one might instead use the maximum across all time
+      steps
+      for each <d-code language='python'>hidden_size</d-code> dimension
+      (<d-code language='python'>output.max(dim=1)</d-code>), the similar mean across all time-steps
+      (<d-code language='python'>output.mean(dim=1)</d-code>), or even concatenate
+      all three options together, <a target='_blank' rel='noopener noreferrer'
+        href='https://arxiv.org/pdf/1801.06146.pdf'>as suggested in the ULMFiT paper.</a>
+      <d-footnote id='attention'>
+        Why be so rigid in choosing which portions of the hidden state to pass to the feed-forward network? Why not
+        allow the architecture to dynamically choose which parts of the text to focus on by, say, using more
+        finely-weighted averages of the different time-steps? Such an idea is a simple version of an <em>attention
+          mechanism</em>, which will be explored in a later post.
+      </d-footnote>
+    </p>
+
+    <p>
+      The <d-code language='python'>python</d-code> above accommodates each of these options and empirically
+      the <d-code language='python'>max</d-code> option tended to perform best, though difference between the strategies
+      were not large.
+    </p>
+
+    <h3>
+      Performance and Interpretation
+    </h3>
+
+    <h4>
+      Validation Set
+    </h4>
+
+    <p>
+      The recurrent architectures perform significantly better than the <a target='_blank' rel='noopener noreferrer'
+        href='https://garrettgoon.com/arxiv-vixra-baseline-models/'>simple baseline models discussed previously</a>,
+      with both the one-hot and embedding models achieving <d-math>\approx 83\%</d-math> accuracy on the validation
+      data, with embedding models performing very slightly better amongst the two options. A disadvantage relative to
+      the baselines, however, is that the recurrent models are much less easily interpretable. What, exactly, is the
+      recurrent architecture picking up on that was missed by the simple baselines?
+    </p>
+
+    <h4>
+      Interpretation
+    </h4>
+
+    <p>
+      The simplicity of the present models allows us to see a glimpse of what is going on, though it is hard to draw any
+      very precise conclusions. In particular, the single number that our model predicts (the probability that a
+      given title is from a viXra paper) arises from a dot-product between the final dimension of the relevant
+      components of the GRU
+      <d-code language='python'>output</d-code> tensor and an appropriately shaped vector. For example, if we only feed
+      the hidden states from the final GRU time-step into the fully connected layer,
+      then this <d-code language='python'>(batch_size, 512)</d-code>-shaped tensor is turned into logits by taking a dot
+      product with a <d-code language='python'>(1, 512)</d-code>-shaped
+      weight vector<d-code language='python'>w</d-code> and adding the scalar bias
+      <d-code language='python'>b</d-code> to the result.
+    </p>
+
+    <p>
+      This means that by re-scaling the GRU hidden states by the appropriate weights and biases, we can get a direct
+      view of the logits<d-footnote id='logits computation'>
+        More precisely, if <d-code language='python'>output</d-code> is
+        <d-code language='python'>(batch_size, seq_len, hidden_size)</d-code>-shaped hidden state tensor of the GRU
+        <d-code language='python'>model</d-code>, where<d-code language='python'>hidden_size = 512</d-code>, then the
+        plot below shows a handful of entries along the
+        <d-code language='python'>batch_size</d-code> dimension of
+        <d-code language='python'>logits_output</d-code> for a particular slice of neurons along
+        the <d-code language='python'>hidden_size</d-code> dimension with
+        <d-code language='python'>logits_output</d-code> defined as in (sketch):
+        <d-code block='' language='python'>
+          w, b = model.weight, model.bias
+          logits_output = output * w + b / output.shape[-1]
+        </d-code>
+        When the model uses only the final time-slice to
+        make viXra-probability predictions, as in thtensor could be computed ase plot below,
+        then<d-code language='python'>logits_output</d-code>
+        is related to the <d-code language='python'>(batch_size, )</d-code>-shaped
+        <d-code language='python'>probs</d-code> probability tensor via
+        <d-code block='' language='python'>
+          last_step_logits = logits_output.sum(dim=-1)[:, -1]
+          probs = last_step_logits.sigmoid()
+        </d-code>
+      </d-footnote>.
+      While other strategies perform better, the case where we make predictions based on the final
+      hidden time step is easiest to interpret. The below plot shows how various hidden-state neurons of one such model
+      (re-scaled as above) are pushed towards a viXra signal (light) or arXiv signal (dark) as they step through a few
+      sample titles from the training set. The logits come from summing up the final (rightmost) column and adding this
+      to the similar sum of neurons not shown in the plot.
+    </p>
+
+    <figure style='grid-column-end: page-end' id='hidden_pot'>
+      <img src='images/balanced_title_recurrent_embedding_excited_neruons.svg' alt='logits from the hidden state'>
+      <figcaption>
+        A plot of various hidden-state neurons re-scaled by appropriate weight and bias factors as they evolve upon
+        seeing two arXiv and two viXra training-data samples. The displayed neurons are the same
+        in all plots and were chosen for being particularly excitable (largest standard deviation over the
+        time-dimension, computed across samples). The common, learned initial-hidden state can be seen on the far left
+        of each figure.
+      </figcaption>
+    </figure>
+
+    <p>
+      Though the evolution in the model's prediction can be clearly seen in each case, it's difficult to interpret
+      what any individual neuron is looking for (nor should such human-interpretable behavior be expected, since the
+      ultimate prediction comes from a linear combination of all final neurons). Still, there are some intriguing
+      observations, such as how the appearance of the word "data" a the end of the final viXra title above apparently
+      darkens many neurons, pushing the prediction slightly less to the viXra side.
+    </p>
+
+
+    <h4>
+      My Papers
+    </h4>
+
+    <p>
+      Finally, we examine the architecture's performance on my own papers. These models performed much better than the
+      baselines when predicting the source of <a target='_blank' rel='noopener noreferrer'
+        href='https://inspirehep.net/literature?sort=mostrecent&size=25&page=1&q=a%20g%20goon&ui-citation-summary=true'>my
+        own papers</a>,
+      thankfully, classifying 17 and 18 out of 20 correctly for the word-embedding and one-hot models,
+      respectively. See the figures below.
+    </p>
+
+    <figure style='grid-column-end: page-end' id='logistic-preds'>
+      <img src='images/balanced_title_recurrent_one_hot_goon_papers_preds.svg' alt='one-hot predictions'>
+      <figcaption>
+        Probabilities that each of my titles are viXra, as predicted by the one-hot GRU model.
+      </figcaption>
+    </figure>
+
+    <figure style='grid-column-end: page-end' id='rf-preds'>
+      <img src='images/balanced_title_recurrent_embedding_goon_papers_preds.svg' alt='embedding predictions'>
+      <figcaption>
+        Probabilities that each of my titles are viXra, as predicted by the word-embedding GRU model.
+      </figcaption>
+    </figure>
+
+    <p>
+      There is no longer an obvious correlation between title-length and viXra-probability, <a target='_blank'
+        rel='noopener noreferrer' href='https://garrettgoon.com/arxiv-vixra-baseline-models/'>as there was for the
+        baseline model predictions</a>.
+    </p>
+
+
+
+
+
+
+
+  </d-article>
+
+
+
+  <d-appendix>
+
+
+    <h3>Acknowledgments</h3>
+
+    <p>
+      Thank you to <a href="https://distill.pub" target="_blank" rel="noopener noreferrer">the <em>Distill</em> team</a>
+      for making their
+      <a href="https://github.com/distillpub" target="_blank" rel="noopener noreferrer">article template publicly
+        available</a> and to the Colab, <d-code language='python'>pytorch lightning</d-code>, and <d-code
+        language='python'>wandb</d-code> teams for their wonderful tools.
+    </p>
+
+    <d-footnote-list></d-footnote-list>
+
+    <h3>Additional Relevant Links</h3>
+
+
+
+    <ul class="color-dot-ul">
+      <li>
+        It is hard to find a better introduction to RNNs than <a target='_blank' rel='noopener noreferrer'
+          href='https://www.youtube.com/watch?v=iWea12EAu6U&list=PLoROMvodv4rOhcuXMZkNm7j3fVwBBY42z&index=6'>lectures 6,
+          7, and 8 of Stanford's <em>CS224N</em> NLP course (2019)</a> by Abigail See. Abigail covers multiple
+        architectures and the intuition behind them, their history, practical tips, and more in an extremely
+        entertaining and concise fashion; amazing work.
+      </li>
+      <li>Stanford's <em>CS230</em>
+        <a target='_blank' rel='noopener noreferrer'
+          href='https://stanford.edu/~shervine/teaching/cs-230/cheatsheet-recurrent-neural-networks'>has made a great
+          cheat sheet</a> for RNNs which is a handy quick reference.
+      </li>
+      <li>
+        I avoided using the standard pictorial representation of RNNs, as they can be very confusing to follow, but an
+        extremely nice explanation using diagrams can be found <a target='_blank' rel='noopener noreferrer'
+          href='https://colah.github.io/posts/2015-08-Understanding-LSTMs/'>here in this blog post by Chris Olah.</a>
+      </li>
+    </ul>
+
+    <h3>All Project Posts</h3>
+
+    <p>Links to all posts in this series.
+      <em>Note: all code for this project can be found <a target='_blank' rel='noopener noreferrer'
+          href='https://github.com/garrett361/arxiv-vixra-ml'>on my GitHub page</a>.
+      </em>
+    </p>
+
+    <ul>
+      <li>
+        <a target="_blank" rel="noopener noreferrer" href="https://garrettgoon.com/arxiv-vixra-data/">The Data</a>
+      </li>
+      <li>
+        <a target='_blank' rel='noopener noreferrer' href='https://garrettgoon.com/arxiv-vixra-workflow/'>Workflow</a>
+      </li>
+      <li>
+        <a target="_blank" rel="noopener noreferrer"
+          href="https://garrettgoon.com/arxiv-vixra-baseline-models/">Baseline Models</a>
+      </li>
+      <li>
+        ...in progress...
+      </li>
+      <li>
+        <a target="_blank" rel="noopener noreferrer"
+          href="https://garrettgoon.com/arxiv-vixra-test-set-conclusions/">Test Set Performance and Conclusions (To
+          Come)</a>
+      </li>
+    </ul>
+  </d-appendix>
+
+
+  <!-- bibliography will be inlined during Distill pipeline's pre-rendering
+    (GG: I have not managed to get the bibliography to compile after the ejs
+     is converted to a static html file, so commenting out)
+  <d-bibliography src="bibliography.bib"></d-bibliography>
+
+   -->
+
+
+</body>
