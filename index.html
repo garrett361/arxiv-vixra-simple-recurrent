@@ -141,10 +141,10 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
 
           &nbsp;&nbsp;def forward(self, inputs: Tensor, hidden: Optional[Tensor] = None) -> Tuple[Tensor, Tensor]:
           &nbsp;&nbsp;&nbsp;&nbsp;if hidden is None:
-          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; hidden = self.initial_hidden
-          &nbsp;&nbsp;&nbsp;&nbsp;# Expand hidden to match batch size and ensure contiguous.
-          &nbsp;&nbsp;&nbsp;&nbsp;batch_size = inputs.shape[0]
-          &nbsp;&nbsp;&nbsp;&nbsp;hidden = hidden.expand(-1, batch_size, -1).contiguous()
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;hidden = self.initial_hidden
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# Expand hidden to match batch size and ensure contiguous.
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;batch_size = inputs.shape[0]
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;hidden = hidden.expand(-1, batch_size, -1).contiguous()
           &nbsp;&nbsp;&nbsp;&nbsp;output, hidden = self.rnn(inputs, hidden)
           &nbsp;&nbsp;&nbsp;&nbsp;return output, hidden
         </d-code>
