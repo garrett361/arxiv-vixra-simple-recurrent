@@ -632,29 +632,30 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
         </d-code>
       </d-footnote>.
       While other strategies perform better, the case where we make predictions based on the final
-      hidden time step is easiest to interpret. The below plot shows how various hidden-state neurons of one such model
-      (re-scaled as above) are pushed towards a viXra signal (light) or arXiv signal (dark) as they step through a few
-      sample titles from the training set. The logits come from summing up the final (rightmost) column and adding this
-      to the similar sum of neurons not shown in the plot.
+      hidden time step is easiest to interpret. The below plot shows how various, re-scaled hidden-state neurons of one
+      such model are pushed towards a viXra signal (light) or arXiv signal (dark) as they step through three
+      titles from my papers. The logits in each case would come from summing up the final (rightmost) column and adding
+      this to the similar sum of neurons not shown in the plot.
     </p>
 
     <figure style='grid-column-end: page-end' id='hidden_pot'>
-      <img src='images/balanced_title_recurrent_embedding_excited_neruons.svg' alt='logits from the hidden state'>
+      <img src='images/balanced_title_recurrent_embedding_excited_neruons_goon.svg' alt='logits from the hidden state'>
       <figcaption>
         A plot of various hidden-state neurons re-scaled by appropriate weight and bias factors as they evolve upon
-        seeing two arXiv and two viXra training-data samples. The displayed neurons are the same
-        in all plots and were chosen for being particularly excitable (largest standard deviation over the
-        time-dimension, computed across samples). The common, learned initial-hidden state can be seen on the far left
-        of each figure.
+        seeing a few of my titles (not included in the training data). The displayed neurons are the same
+        in all plots and were chosen for being particularly excitable, as measured by standard deviation over the
+        time-dimension. The common, learned initial-hidden state can be seen on the far left of each figure.
       </figcaption>
     </figure>
 
     <p>
       Though the evolution in the model's prediction can be clearly seen in each case, it's difficult to interpret
-      what any individual neuron is looking for (nor should such human-interpretable behavior be expected, since the
-      ultimate prediction comes from a linear combination of all final neurons). Still, there are some intriguing
-      observations, such as how the appearance of the word "data" a the end of the final viXra title above apparently
-      darkens many neurons, pushing the prediction slightly less to the viXra side.
+      what any individual neuron is looking for (nor should such human-interpretable behavior be expected). Still, there
+      are some intriguing observations. For instance in top image there are two bright streak, one at the top and the
+      other a few rows down, that are plausibly sending out a viXra signal due to the very short title length. However,
+      these same neurons send out much weaker signals for the similarly-short middle example and in the final image the
+      lower bright streak turn drastically towards a dark, arXiv signal as it encounters text, but
+      then it quickly reverts to a strong viXra signal once again a few words down the road. Inconclusive.
     </p>
 
 
