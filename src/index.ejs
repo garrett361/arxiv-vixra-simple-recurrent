@@ -639,23 +639,24 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
     </p>
 
     <figure style='grid-column-end: page-end' id='hidden_pot'>
-      <img src='images/balanced_title_recurrent_embedding_excited_neruons_goon.svg' alt='logits from the hidden state'>
+      <img src='images/balanced_title_recurrent_embedding_neruons_abs_last_goon.svg' alt='logits from the hidden state'>
       <figcaption>
         A plot of various hidden-state neurons re-scaled by appropriate weight and bias factors as they evolve upon
-        seeing a few of my titles (not included in the training data). The displayed neurons are the same
-        in all plots and were chosen for being particularly excitable, as measured by standard deviation over the
-        time-dimension. The common, learned initial-hidden state can be seen on the far left of each figure.
+        seeing a few of my titles (which were not included in the training data). The displayed neurons are the same
+        in all plots and were chosen for having relatively large magnitudes in their final-time-step (right end of
+        plot). The common, learned initial-hidden state can be seen on the far left of each figure.
       </figcaption>
     </figure>
 
     <p>
       Though the evolution in the model's prediction can be clearly seen in each case, it's difficult to interpret
-      what any individual neuron is looking for (nor should such human-interpretable behavior be expected). Still, there
-      are some intriguing observations. For instance in top image there are two bright streak, one at the top and the
-      other a few rows down, that are plausibly sending out a viXra signal due to the very short title length. However,
-      these same neurons send out much weaker signals for the similarly-short middle example and in the final image the
-      lower bright streak turn drastically towards a dark, arXiv signal as it encounters text, but
-      then it quickly reverts to a strong viXra signal once again a few words down the road. Inconclusive.
+      what any individual neuron is looking for (nor should such human-interpretable behavior be expected). There
+      are some intriguing signs, but most seem to fall apart under scrutiny. For instance, the bright streak in the top
+      image could plausibly be attuned to
+      title length as its viXra signal grows as it sees more and more padding and terminates in a moderate viXra-leaning
+      signal for this very short title. However, these same neurons terminate in a slightly arXiv-leaning signal for the
+      similarly-short middle example and in the final image the neuron whiplashes back and forth upon encountering text
+      and terminates in a moderate viXra signal for this much-longer title. Inconclusive.
     </p>
 
 
@@ -668,7 +669,7 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
       baselines when predicting the source of <a target='_blank' rel='noopener noreferrer'
         href='https://inspirehep.net/literature?sort=mostrecent&size=25&page=1&q=a%20g%20goon&ui-citation-summary=true'>my
         own papers</a>,
-      thankfully, classifying 17 and 18 out of 20 correctly for the word-embedding and one-hot models,
+      thankfully, classifying 17- and 18-out-of-20 correctly for the word-embedding and one-hot models,
       respectively. See the figures below.
     </p>
 
@@ -689,8 +690,36 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
     <p>
       There is no longer an obvious correlation between title-length and viXra-probability, <a target='_blank'
         rel='noopener noreferrer' href='https://garrettgoon.com/arxiv-vixra-baseline-models/'>as there was for the
-        baseline model predictions</a>.
+        baseline model predictions</a>. The ROC curve<d-footnote id='roc_curve'>
+        Receiver Operating Characteristic (ROC) curves such as this one plot the true-positive-rate (often called
+        precision) on the y-axis and false-positive-rate on the x-axis as we vary the threshold for what constitutes a
+        positive prediction. (In the context of arXiv/viXra, <d-math>P({\rm pred. =
+          viXra}|{\rm source =viXra})</d-math> is the vertical and <d-math>P({\rm pred. =
+          viXra}|{\rm source =arXiv})</d-math> is the horizontal.) By threshold, we are referring to the fact that our
+        models are assigned a score, say the logits, to each example and we are declaring that positive scores
+        correspond to positive (viXra) predictions and negative scores to negative (arXiv) predictions, but this needn't
+        be so. As the threshold is varied, the relative true- and false-positive-rates change, generating the below
+        curve. The top right corner corresponds to sending the threshold to <d-math>+\infty</d-math> (classifying all
+        positive cases correctly, but also generating many false negatives) and the bottom right corner is the opposite
+        limit.
+
+        <br>
+        <br>
+        Denoting the abstract score assigned to an example by <d-math>s</d-math>, the positive and negative
+        examples belong to separate distributions, <d-math>\rho_1(s)</d-math> and <d-math>\rho_0(s)</d-math>,
+        respectively. The area under the curve (AUC) has a lovely, precise meaning: it is the probability that the score
+        the model assigns to a randomly chosen positive (viXra)
+        example will be higher than that of a randomly chosen negative (arXiv) example,
+        <d-math block=''>
+          {\rm AUC} = \int_{-\infty}^{\infty}{\rm d} s_1{\rm d} s_0\,\theta(s_1 - s_0) \rho_1(s_1)\rho_0(s_0)= P[S_1 \ge
+          S_0]\ .
+        </d-math>
+      </d-footnote> for the embedding model can be found below.
     </p>
+
+    <figure style='' id='roc'>
+      <img src='images/roc_curve.png' alt='ROC curve for the embedding GRU'>
+    </figure>
 
 
 
