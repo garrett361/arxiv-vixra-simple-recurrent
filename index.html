@@ -100,26 +100,26 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
     <h4>General Structure</h4>
 
     <p>
-      RNNs are relevant for problem in which we have an ordered series of inputs <d-math>x_t</d-math>, where <d-math>
-        t\in\{0,\ldots, T\}</d-math>, and we wish to use the entire series for some useful purpose. In the context of
-      arXiv/viXra,
-      the <d-math>x_t</d-math> would be (tensorial representations of) the individual characters or words in a title,
-      say, in their natural left-to-right order.
+      RNNs are relevant when our input data forms an ordered series <d-math>x_t</d-math>, <d-math>
+        t\in\{1,\ldots, \texttt{seq\_len}\}</d-math>. In the context of arXiv/viXra, the <d-math>x_t</d-math> would
+      be (tensorial representations of) the individual characters or words in a title with <d-math>t</d-math> indexing
+      the position of
+      these elements in the title.
     </p>
 
     <p>
-      The inputs <d-math>x_t</d-math> are consumed sequentially and are used to update the internal state of the RNN,
+      The inputs <d-math>x_t</d-math> are consumed sequentially and are used to update an internal state of the RNN,
       <d-math>h_t</d-math>, a <em>hidden</em> or <em>latent</em> variable. The update step also takes into account the
-      form of the previous hidden state, <d-math>h_{t-1}</d-math>, and this pattern continues recursively such that
-      <d-math>h_t
-      </d-math> contains information from all previous hidden states and inputs all the way back to the initial
+      form of the previous hidden state, <d-math>h_{t-1}</d-math>, and this pattern continues on and on such that
+      <d-math>h_t</d-math> contains information from all previous inputs and hidden states all the way back to the
+      initial
       <d-footnote id='hidden_initialization'>
         The initial hidden state <d-math>h_0</d-math> is often taken to be a tensor filled with zeros. <a
           target='_blank' rel='noopener noreferrer'
           href='https://pytorch.org/docs/stable/generated/torch.nn.RNN.html'>This is the
           default behavior</a>
         <d-code language='python'>pytorch</d-code>, for instance. However, it is generally beneficial in Machine
-        Learning to allow the model to figure out its own best parameters when possible, and <a target='_blank'
+        Learning to allow the model to figure out its own best parameters, when possible, and <a target='_blank'
           rel='noopener noreferrer' href='https://ruder.io/deep-learning-nlp-best-practices/'>the best practice</a> is
         to
         promote
@@ -149,8 +149,7 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
           &nbsp;&nbsp;&nbsp;&nbsp;return output, hidden
         </d-code>
       </d-footnote>
-      <d-math>
-        x_0</d-math> and <d-math>h_0</d-math>. This long chain of dependencies can create difficulties in training
+      <d-math>h_0</d-math>. This long chain of dependencies can create difficulties in training
       <d-footnote id='tbptt'>
         For very long sequences of length-<d-math>T</d-math>, it is common to process the sequence in length-<d-math>
           n\ll T
@@ -192,7 +191,8 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
     <p>
       The hidden states <d-math>h_t</d-math> are also the outputs of the entire network, one or more of which are then
       used for further purposes. In the context of arXiv/viXra text classificaiton, the simplest use would be to take
-      the final hidden state <d-math>h_T</d-math>, which carries information about the entire sequence, and feed this
+      the final hidden state <d-math>h_{\texttt{seq\_len}}</d-math>, which carries information about the entire
+      sequence, and feed this
       into a fully connected layer and sigmoid function to predict the classification probabilities of a given title.
     </p>
 
@@ -237,7 +237,11 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
         doubles the size of the hidden state if the architecture is also bidirectional; see below. The batch
         dimensions
         are processed in parallel in the steps outlined below. Indices on <d-math>x_t, h_t</d-math> will generally be
-        suppressed, as in the above.
+        suppressed, as in the above. I have also compressed the separate <d-math>b_{iz}</d-math> and <d-math>b_{hz}
+        </d-math> biases of the <d-code language='python'>pytorch</d-code>
+        <d-code language='python'>nn.GRU</d-code> implementation into a single <d-math>b_z</d-math> vector for brevity
+        and similar for <d-math>b_r</d-math>.
+
       </d-footnote> :
     <ul>
       <li>
@@ -267,7 +271,41 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
         </d-math>
       </li>
       <li>
-        The fully updated hidden state is a weighted sum of the previous hidden
+        The fully updated hidden state is a weighted sum<d-footnote id='rnn_improvement'>
+          This weighted-sum update step between <d-math>h_t</d-math> and <d-math>h_{t-1}</d-math> is one of the central
+          advantages of GRUs (and LSTMs) over the vanilla RNN architecture in which the update step
+          is instead of the form
+          <d-math>h_t = \tanh\left(W_{ih}\cdot x_t +W_{hh}\cdot h_{t-1} + b_h\right)</d-math>. To see one reason why,
+          consider the limit in which the data has provided a very strong signal at some time-step <d-math>t</d-math>
+          with all later data points being relatively uninformative. In this case, the architecture would perform best
+          by holding onto the information in the current hidden state <d-math>h_t</d-math>, using its parameters to
+          maintain <d-math>h_{t'}
+            \approx h_t</d-math> for all <d-math>t'\ge t</d-math>. The GRU could accomplish this relatively easily by
+          ensuring the
+          pre-activations (arguments of <d-math>\sigma</d-math>) of the so-called update gate <d-math>z_t</d-math> are
+          large and positive, such that <d-math>z_t\approx {\bf 1}</d-math> is nearly the identity and thereby
+          propagating forward the current hidden state relatively unscathed: <d-math>h_{t}\approx h_{t-1}</d-math>.
+          Accomplishing the same means in the vanilla RNN
+          is
+          much more difficult, as one would
+          need to choose the weights and biases such that <d-math>h_{t} = \tanh\left(W_{ih}\cdot x_t
+            +W_{hh}\cdot h_{t-1} + b_h\right)\approx h_{t-1} </d-math> which is a far-tougher balancing act. In
+          particular, even if one made the optimistic assumptions that the architecture could learn to push the weights
+          and biases into the
+          regime in which <d-math>\tanh</d-math> is approximately linear and the <d-math>\sim W_{ih}, b_h</d-math>
+          terms contribute negligibly, such that <d-math>h_t \approx W_{hh}\cdot h_{t-1}</d-math>, then achieving the
+          desired goal would still require carefully tuning <d-math>W_{hh}</d-math>
+          so that it nearly acts on <d-math>h_{t-1}</d-math> as the identity. And even if this were accomplished so that
+          hidden states at neighboring time-steps were approximately equal, states separated by <d-math>n</d-math>
+          time-steps still diverge exponentially, scaling like the largest eigenvalue of <d-math>W_{hh}</d-math> (
+          <d-math>\lambda_{\rm max}</d-math>) to the
+          <d-math>
+            n</d-math>-th power: <d-math>h_{t+n}\sim \lambda_{\rm max}^n h_t</d-math>. This type of scaling is a general
+          problem for RNNs, regardless of whether they are attempting to hold onto the current hidden state, known <a
+            target='_blank' rel='noopener noreferrer' href='https://arxiv.org/pdf/1211.5063.pdf'>as the vanishing and
+            exploding gradient problem.</a> The weighted-sum update step of the GRU helps ameliorate this issue, though
+          it does not resolve it entirely.
+        </d-footnote> of the previous hidden
         state <d-math>h_{t-1}</d-math> and the
         new information <d-math>n_t</d-math>:
         <d-math block=''>
@@ -300,17 +338,15 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
         <d-math>i \in\{0, \ldots, N-1\}</d-math>, one per layer. While the <d-math>x_t</d-math> are still the inputs for
         the first
         <d-math>i=0</d-math> layer, subsequent layers with <d-math>i>0</d-math> process the hidden state of the
-        preceding layer (<d-math>h^{i-1}_t</d-math>) as their input. The weights and biases of layers <d-math>i>0
-        </d-math> thus have different dimensions from those of the first <d-math>i=0</d-math> layer, if
-        <d-code language='python'>input_size != hidden_size</d-code>. In <d-code language='python'>pytorch</d-code>, the
-        outputs of stacked architectures are the hidden states of the final layer at each time-step: <d-math>h^{N-1}_t
+        preceding layer (<d-math>h^{i-1}_t</d-math>) as their input. The outputs of the stacked RNN are the hidden
+        states of the final layer across all time-steps: <d-math>h^{N-1}_t
         </d-math>.
       </li>
       <li>
         Bidirectional RNNs process the inputs forwards and backwards, with independent weights and biases used for each
         pass. This is desirable in contexts such as arXiv/viXra classification, since the passes in the two directions
-        capture different contextual information, both directions being plausbily informative. In <d-code
-          language='python'>pytorch</d-code>, the outputs of a bidirectional architecture come from concatenating the
+        capture different contextual information. In <d-code language='python'>pytorch</d-code>, the outputs of a
+        bidirectional architecture come from concatenating the
         hidden states of the two passes together<d-footnote id='bidirectional'>
           I found the concatenation step a little under-documented. The<d-code language='python'>output</d-code> tensor
           is
@@ -343,7 +379,7 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
           <d-code language='python'>hidden</d-code> tensor returned by the RNN and, thankfully, these are what one would
           expect: they are the final hidden states which arise from a forward pass and a backward pass, concatenated
           into a
-          <d-code language='python'>(2, seq_len, hidden_size)</d-code>-tensor. These statements can be
+          <d-code language='python'>(2, seq_len, hidden_size)</d-code>-shaped tensor. These statements can be
           verified (<a target='_blank' rel='noopener noreferrer'
             href='https://towardsdatascience.com/understanding-bidirectional-rnn-in-pytorch-5bd25a5dd66'>following this
             nice post</a>) by creating a bidirectional RNN, two single-direction RNNs which have their weights tied to
@@ -388,7 +424,7 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
           <d-code language='python'>output[:, -1, :hidden_size]</d-code> and
           <d-code language='python'>output[:, 0, hidden_size:]</d-code>, <em>not</em> simply the final entry
           <d-code language='python'>output[:, -1]</d-code>.
-
+        </d-footnote>.
       </li>
     </ul>
     </p>
@@ -567,7 +603,10 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
     </p>
 
     <p>
-      The <d-code language='python'>python</d-code> above accommodates each of these options and empirically
+      The <a target='_blank' rel='noopener noreferrer'
+        href='https://github.com/garrett361/arxiv-vixra-ml/blob/main/arxiv_vixra_models/simple_recurrent.py'>
+        <d-code language='python'>arxiv_vixra_models</d-code>
+      </a> code accommodates each of these options and empirically
       the <d-code language='python'>max</d-code> option tended to perform best, though difference between the strategies
       were not large.
     </p>
@@ -581,23 +620,26 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
     </h4>
 
     <p>
-      The recurrent architectures perform significantly better than the <a target='_blank' rel='noopener noreferrer'
-        href='https://garrettgoon.com/arxiv-vixra-baseline-models/'>simple baseline models discussed previously</a>,
-      with both the one-hot and embedding models achieving <d-math>\approx 83\%</d-math> accuracy on the validation
-      data, with embedding models performing very slightly better amongst the two options. The ROC curve<d-footnote
-        id='roc_curve'>
-        Receiver Operating Characteristic (ROC) curves such as this one plot the true-positive-rate (often called
-        precision) on the y-axis and false-positive-rate on the x-axis as we vary the threshold for what constitutes a
-        positive prediction. (In the context of arXiv/viXra, <d-math>P({\rm pred. =
+      The one-hot and embedding-space recurrent architectures both achieved <d-math>\approx 83\%</d-math> accuracy on
+      the validation
+      data, which is significantly better than the <d-math>\mathcal{O}(70\%)
+      </d-math> peformance of the <a target='_blank' rel='noopener noreferrer'
+        href='https://garrettgoon.com/arxiv-vixra-baseline-models/'>simple baseline models discussed previously</a>. Of
+      the two models,
+      the embedding-space architecture performed very slightly better. The ROC curve<d-footnote id='roc_curve'>
+        Receiver Operating Characteristic (ROC) curves plot the true-positive-rate (often called
+        precision) on the y-axis and false-positive-rate on the x-axis as the threshold for what constitutes a
+        positive prediction is varied. (In the context of arXiv/viXra, <d-math>P({\rm pred. =
           viXra}|{\rm source =viXra})</d-math> is the vertical and <d-math>P({\rm pred. =
           viXra}|{\rm source =arXiv})</d-math> is the horizontal.) By threshold, we are referring to the fact that
-        classification models are assigning a score to every example and this score is used to set the prediction
-        boundary. The typical case is the present one, in which logits are the score and we are
-        declaring positive scores correspond to positive (viXra) predictions and negative scores to negative
-        (arXiv) predictions, but this needn't be so. As the threshold is varied, the relative true- and
-        false-positive-rates change, generating the below curve. The top right corner corresponds to sending the
+        classification models are assigning a score to every example and this score is used to set the
+        prediction
+        boundary. In the canonical case, the score is given by the logits and one usually declares that positive and
+        negative logits correspond to a positive and negative predictions, respectively, but one could also consider
+        moving this boundary away from zero. As the threshold is varied, the relative true- and
+        false-positive-rates change, generating the below curve. The top-right corner corresponds to sending the
         threshold to <d-math>-\infty</d-math> (classifying all
-        positive cases correctly, but also generating many false negatives) and the bottom right corner is the opposite
+        positive cases correctly, but also generating many false-positives) and the bottom-left corner is the opposite
         limit.
 
         <br>
@@ -605,21 +647,22 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
         Denoting the abstract score assigned to an example by <d-math>s</d-math>, the positive and negative
         examples belong to separate distributions, <d-math>\rho_1(s)</d-math> and <d-math>\rho_0(s)</d-math>,
         respectively. The area under the curve (AUC) has a lovely, precise meaning: it is the probability that the score
-        the model assigns to a randomly chosen positive (viXra)
-        example will be higher than that of a randomly chosen negative (arXiv) example,
+        the model assigns to a randomly chosen positive
+        example will be higher than that of a randomly chosen negative example,
         <d-math block=''>
           {\rm AUC} = \int_{-\infty}^{\infty}{\rm d} s_1{\rm d} s_0\,\theta(s_1 - s_0) \rho_1(s_1)\rho_0(s_0)= P[S_1 \ge
           S_0]\ .
         </d-math>
-      </d-footnote> for the embedding model can be found below. A disadvantage relative to
-      the baselines, however, is that the recurrent models are much less easily interpretable. What, exactly, is the
-      recurrent architecture picking up on that was missed by the simple baselines?
+      </d-footnote> for the embedding model can be found below. A disadvantage of the present architectures relative to
+      the baseline models, however, is that they are much more opaque. What, exactly, is
+      the recurrent architecture picking up on that was missed by the simple baselines?
     </p>
 
     <figure style='' id='roc'>
       <img src='images/roc_curve.png' alt='ROC curve for the embedding GRU'>
       <figcaption>
-        The ROC curve for the best-performing embedding model. AUC is a measure of how well-separated the logit-space
+        The ROC curve for the best-performing embedding model. AUC is, roughly, a measure of how well-separated the
+        logit-space
         distributions of arXiv and viXra papers are, as generated by the model.
       </figcaption>
     </figure>
