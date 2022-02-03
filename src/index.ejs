@@ -245,7 +245,8 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
       </d-footnote> :
     <ul>
       <li>
-        Use <d-math>x_t</d-math> and the preceding hidden state <d-math>h_{t-1}</d-math> to determine what fraction of
+        Use <d-math>x_t</d-math> and the preceding hidden state <d-math>h_{t-1}</d-math> to determine what fraction
+        (element-wise) of
         <d-math>h_{t-1}</d-math> to hold onto and include in the updated state <d-math>h_{t}</d-math>. The fraction
         $z_t$ is
         determined through the usual process of using weight-matrices (<d-math>W</d-math>), bias-vectors (<d-math>b
