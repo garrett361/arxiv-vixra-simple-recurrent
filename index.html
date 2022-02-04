@@ -88,7 +88,7 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
     <p>
       <em>Recurrent Neural Networks</em> (RNNs) are the basic architecture which attempts to capture the information in
       the
-      relative ordering of inputs. We briefly review their properties below, some details of their implementation
+      relative ordering of inputs. I briefly review their properties below, some details of their implementation
       in
       <d-code language='python'>pytorch</d-code>, and examine their performance on the arXiv/viXra data and on my own
       papers.
@@ -326,8 +326,8 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
     </h4>
 
     <p>
-      We finally mention the possibility of increasing the depth of the RNN architecture by stacking multiple such
-      layers and the option of processing the inputs <d-math>x_t</d-math> in both the forward and backwards directions,
+      Finally, one could increase the depth of the RNN architecture by stacking multiple such
+      layers and could also process the inputs <d-math>x_t</d-math> in both the forward and backwards directions,
       resulting in a <em>bidirectional</em> architecture.
     </p>
 
@@ -433,7 +433,7 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
     <h3>RNNs for arXiv/viXra</h3>
 
     <p>
-      Sticking to the theme of starting simple, we analyze the performance of single-layer, uni-directional GRUs on
+      Sticking to the theme of starting simple, I analyze the performance of single-layer, uni-directional GRUs on
       arXiv/viXra title data<d-footnote id='experiments'>
         Experiments with additional layers and bidirectionality only led to modest improvements upon the results
         reported below.
@@ -443,7 +443,8 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
     <h4>Character- or Word-Level?</h4>
 
     <p>
-      We need to decide how exactly to encode the text as a series of tensors <d-math>x_t</d-math>. The natural options
+      One needs to decide how exactly to encode the text as a series of tensors <d-math>x_t</d-math>. The natural
+      options
       are as follows:
     <ul>
       <li>
@@ -497,7 +498,7 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
         </d-footnote>.
       </li>
       <li>
-        <b>Embeddings:</b> Alternatively, we could let each time-step correspond to a single <em>word</em>
+        <b>Embeddings:</b> Alternatively, one could let each time-step correspond to a single <em>word</em>
         <d-footnote id='word_def'>
           Or other series of characters separated from others by white space, per the details of text-normalization. We
           will refer to them all as "words", for simplicity.
@@ -505,7 +506,7 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
         a
         corpus' vocabulary, as opposed to <d-math>C\sim \mathcal{O}(10 ^2)</d-math> characters, making a one-hot
         encoding
-        infeasible. Instead, we can assign each word is to a vector living in some
+        infeasible. Instead, we can assign each word to a vector living in some
         <d-code language='python'>embedding_dim</d-code>
         <d-math>\ll V</d-math>-sized vector space, with the components of each vector
         randomly initialized. The vector components are learnable parameters which mutate upon training.
@@ -514,7 +515,7 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
     </p>
 
     <p>
-      We use both options. For embeddings, there are various choices to make. One has to choose both the dimension of
+      I use both options. For embeddings, there are various choices to make. One has to choose both the dimension of
       the embedding space<d-footnote id='embedding_space'>
         The embeddings are stored in a <d-code language='python'>(V, embedding_dim)</d-code>-shaped matrix <d-math>E
         </d-math>.
@@ -543,7 +544,7 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
       with
       a subset of the vocabulary, as the vast majority of the words in a corpus are captured in a tiny fraction of the
       vocabulary, a general phenomenon <a target='_blank' rel='noopener noreferrer'
-        href='https://en.wikipedia.org/wiki/Zipf' s_law'>known as Zipf's law</a>. See the plot below. We set
+        href='https://en.wikipedia.org/wiki/Zipf' s_law'>known as Zipf's law</a>. See the plot below. I set
       <d-code language='python'>embedding_dim = 256</d-code> and work
       with the whole
       <d-math>V\sim \mathcal{O}(2 \times 10 ^4)</d-math>-sized vocabulary for arXiv/viXra titles.
@@ -570,7 +571,7 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
       The recurrent models are all fairly simple: the GRU consumes the one-hot-encoded or embedded text as inputs and
       the ensuing hidden states (which are optionally first passed through a dropout layer) are fed into a
       single fully-connected layer to predict a single number, the
-      probability that a given title comes from a viXra paper. We use
+      probability that a given title comes from a viXra paper. I use
       <d-code language='python'>hidden_size = 512</d-code> for all models.
     </p>
 
@@ -632,7 +633,7 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
         precision) on the y-axis and false-positive-rate on the x-axis as the threshold for what constitutes a
         positive prediction is varied. (In the context of arXiv/viXra, <d-math>P({\rm pred. =
           viXra}|{\rm source =viXra})</d-math> is the vertical and <d-math>P({\rm pred. =
-          viXra}|{\rm source =arXiv})</d-math> is the horizontal.) By threshold, we are referring to the fact that
+          viXra}|{\rm source =arXiv})</d-math> is the horizontal.) By threshold, I am referring to the fact that
         classification models are assigning a score to every example and this score is used to set the
         prediction
         boundary. In the canonical case, the score is given by the logits and one usually declares that positive and
@@ -710,7 +711,7 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
           probs = last_step_logits.sigmoid()
         </d-code>
       </d-footnote>.
-      While other strategies perform better, the case where we make predictions based on the final
+      While other strategies perform better, the case where one makes predictions based on the final
       hidden time step is easiest to interpret. The below plot shows how various, re-scaled hidden-state neurons of one
       such model are pushed towards a viXra signal (light) or arXiv signal (dark) as they step through three
       titles from my papers. The logits in each case would come from summing up the final (rightmost) column and adding
@@ -744,7 +745,7 @@ as with /static as their root. E.g. <img src="/diagrams/fig1.png">
     </h4>
 
     <p>
-      Finally, we examine the architecture's performance on my own papers. These models performed much better than the
+      Finally, I examine the architecture's performance on my own papers. These models performed much better than the
       baselines when predicting the source of <a target='_blank' rel='noopener noreferrer'
         href='https://inspirehep.net/literature?sort=mostrecent&size=25&page=1&q=a%20g%20goon&ui-citation-summary=true'>my
         own papers</a>,
